@@ -27,7 +27,7 @@ def getpdfname(pdfdir, namelistfile):
         words = re.split(r"[;._\s]", name)
         try:
             for word in words:
-                ftxt.write(word + " ")
+                ftxt.write(word.lower() + " ")
             ftxt.write("\r\n")
         except:
             print("file name: ", words)
