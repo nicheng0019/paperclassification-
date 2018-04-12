@@ -3,13 +3,17 @@ import os
 import re
 import codecs
 import shutil
+from nltk.stem.porter import PorterStemmer
+from nltk.stem.wordnet import WordNetLemmatizer
 
 def getpdfname(pdfdir, namelistfile):
+    stem = PorterStemmer()
+    lem = WordNetLemmatizer()
+
     notsuredir = r"notsure"
     if not os.path.exists(notsuredir):
         os.makedirs(notsuredir)
 
-    word_dict = []
     ftxt = codecs.open(namelistfile, encoding="utf-8", mode="w")
     rootdir = pdfdir
     for fn in os.listdir(rootdir):
@@ -24,10 +28,19 @@ def getpdfname(pdfdir, namelistfile):
             print(searchobj.group())
         name = fn.replace(result, "")
 
+        name = name.strip().strip(")")
+        name = name.replace("(", "")
+        name = name.replace(")", "")
+        name = name.replace("[", "")
+        name = name.replace("]", "")
+        name = name.replace("-", " ")
+        name = name.replace("    ", " ")
+        name = name.replace("   ", " ")
+        name = name.replace("  ", " ")
         words = re.split(r"[;._\s]", name)
         try:
             for word in words:
-                ftxt.write(word.lower() + " ")
+                ftxt.write(lem.lemmatize(word.lower(), "n") + " ")
             ftxt.write("\r\n")
         except:
             print("file name: ", words)
