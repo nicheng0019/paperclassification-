@@ -4,12 +4,15 @@ import re
 import codecs
 import shutil
 import numpy as np
-from nltk.stem.porter import PorterStemmer
-from nltk.stem.wordnet import WordNetLemmatizer
+from textblob import TextBlob
+#from textblob import Word
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.cluster import KMeans
+from nltk.stem.wordnet import WordNetLemmatizer
 
 def getnormalizename(originalname):
+    lem = WordNetLemmatizer()
+
     pattern = '_[0-9]+.[0-9]+(.*)pdf'
     searchobj = re.search(pattern, originalname)
     result = ".pdf"
@@ -31,14 +34,15 @@ def getnormalizename(originalname):
     name = name.replace("  ", " ")
     words = re.split(r"[;._\s]", name)
 
-    stem = PorterStemmer()
-    lem = WordNetLemmatizer()
     try:
         words_str = ""
         for word in words:
-            words_str = words_str + lem.lemmatize(word.lower(), "n") + " "
+            lower_word = word.lower()
+            correct_word = TextBlob(lower_word).correct().words[0]
+            lemmatize_word = lem.lemmatize(correct_word, "n")
+            words_str = words_str + lemmatize_word + " "
     except:
-        #print(originalname)
+        print(originalname)
         return None
 
     return words_str
@@ -95,7 +99,6 @@ def classifypaperfiles(paperdir, namelistfile, num_clusters=5):
         if normal_name != None:
             feature = getfeaturebyfilename(normal_name, word_dict)
             predictresult = km.predict(feature)
-            print(predictresult)
             dstdir = os.path.join(rootdir, str(predictresult[0]))
         else:
             dstdir = os.path.join(rootdir, "notsure")
