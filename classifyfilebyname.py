@@ -48,11 +48,11 @@ def getfeaturebyfilename(filename, word_dict):
     words = filename.strip().split(" ")
     for word in words:
         if word in word_dict.keys():
-            feature[0, word_dict[word]] = 1
+            feature[0, word_dict[word]] = feature[0, word_dict[word]] + 1
 
     return feature
 
-def classifypaperfiles(paperdir, namelistfile):
+def classifypaperfiles(paperdir, namelistfile, num_clusters=5):
     ftxt = codecs.open(namelistfile, encoding="utf-8", mode="w")
 
     rootdir = paperdir
@@ -81,15 +81,10 @@ def classifypaperfiles(paperdir, namelistfile):
     for index, name in enumerate(paper_names):
         features[index] = getfeaturebyfilename(name, word_dict)[0]
 
-    num_clusters = 20
     km = KMeans(n_clusters=num_clusters).fit(features)
     paper_labels = km.labels_
 
     print(paper_labels)
-
-    notsuredir = r"notsure"
-    if not os.path.exists(notsuredir):
-        os.makedirs(notsuredir)
 
     for fn in os.listdir(rootdir):
         if os.path.isdir(os.path.join(rootdir, fn)):
@@ -99,11 +94,18 @@ def classifypaperfiles(paperdir, namelistfile):
 
         if normal_name != None:
             feature = getfeaturebyfilename(normal_name, word_dict)
-            print(km.predict(feature))
+            predictresult = km.predict(feature)
+            print(predictresult)
+            dstdir = os.path.join(rootdir, str(predictresult[0]))
         else:
-            shutil.copy(os.path.join(rootdir, fn), os.path.join(notsuredir, fn))
+            dstdir = os.path.join(rootdir, "notsure")
+
+        if not os.path.exists(dstdir):
+            os.makedirs(dstdir)
+        shutil.copy(os.path.join(rootdir, fn), os.path.join(dstdir, fn))
 
 if __name__=='__main__':
     paperdir = r"D:\paper"
     namelistfile = "pdf_train.txt"
-    classifypaperfiles(paperdir, namelistfile)
+    num_clusters = 10
+    classifypaperfiles(paperdir, namelistfile, num_clusters=num_clusters)
