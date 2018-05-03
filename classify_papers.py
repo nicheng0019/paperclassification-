@@ -42,7 +42,7 @@ def get_normalize_name(originalname):
 
     return words_str
 
-def get_feature_by_filename(filename, word_dict):
+def get_feature_by_words(filename, word_dict):
     feature = np.zeros((1, len(word_dict.keys())))
     words = filename.strip().split(" ")
     for word in words:
@@ -53,21 +53,28 @@ def get_feature_by_filename(filename, word_dict):
 
 def get_words_feature(words):
     global dict_vec
-    feature = []
+    vecs = []
+    print(dict_vec.keys())
     for word in words:
-        if word not in dict_vec.keys():
+        if word not in dict_vec:
             continue
 
-        feature.append(dict_vec[word])
+        vecs.append(dict_vec[word])
 
-    return np.array(feature)
+    return np.array(vecs)
 
 def get_paper_content(filename):
     with codecs.open(filename, mode="r", encoding="utf-8") as ftxt:
-        content = ftxt.readlines()
+        content = ftxt.readline()
 
+        return content
+
+def get_paper_words(filename):
+    content = get_paper_content(filename)
     if len(content) == 0:
-        return ""
+        return None
+
+    lem = WordNetLemmatizer()
 
     content = content[0]
     words = content.split(" ")
@@ -77,95 +84,139 @@ def get_paper_content(filename):
         if check_invalid_word(word):
             continue
 
-        wordsnew.append(word)
+        lower_word = word.lower()
+        correct_word = TextBlob(lower_word).correct().words[0]
+        lemmatize_word = lem.lemmatize(correct_word, "n")
 
-    print(wordsnew)
+        wordsnew.append(lemmatize_word)
+
+    #print("wordsnew", wordsnew)
 
     return wordsnew
 
 def get_paper_feature(fnpath):
-    content = get_paper_content(fnpath)
+    words = get_paper_words(fnpath)
+    if words is None:
+        return None
 
-    get_words_feature(content)
+    feature = get_words_feature(words)
+    if len(feature) == 0:
+        return None
 
+    normfeature = np.zeros([100, feature.shape[1]])
+    validnum = min(100, feature.shape[0])
+    normfeature[validnum, :] = feature[validnum, :]
 
+    print(normfeature)
+    return normfeature
 
-def classify_papers(rootdir, num_clusters=5, featuretype="content"):
+def classify_papers(rootdir, paperdir, num_clusters=5, featuretype="content"):
+    features = []
+
     for fn in os.listdir(rootdir):
         fnpath = os.path.join(rootdir, fn)
         if os.path.isdir(fnpath):
             continue
 
-        if featuretype == "name":
-            names = []
-            name = get_normalize_name(fn)
-            if name != None:
-                names.append(unicode(name))
+        feature = None
+        if featuretype is "name":
+            feature = get_normalize_name(fn)
+            #if name != None:
+            #    features.append(unicode(name))
 
-            count_v1 = CountVectorizer(max_df=0.8, min_df=0.01)
-            counts_train = count_v1.fit_transform(names)
-
-            word_dict = {}
-            for index, word in enumerate(count_v1.get_feature_names()):
-                word_dict[word] = index
-
-            features = np.zeros((len(names), len(word_dict.keys())))
-            for index, name in enumerate(names):
-                features[index] = get_feature_by_filename(name, word_dict)[0]
+        elif featuretype is "content":
+            feature = get_paper_content(fnpath)
+            #if content != None:
+            #    features.append(unicode(content))
 
         else:
-            features = []
             feature = get_paper_feature(fnpath)
 
-            if feature != None:
-                features.append(feature)
+        if feature != None:
+            features.append(feature)
 
-            features = np.array(features)
+    if featuretype is "name" or featuretype is "content":
+        count_v1 = CountVectorizer(max_df=0.8, min_df=0.01)
+        counts_train = count_v1.fit_transform(features)
 
-    km = KMeans(n_clusters=num_clusters).fit(features)
+        word_dict = {}
+        for index, word in enumerate(count_v1.get_feature_names()):
+            word_dict[word] = index
+
+        vecs = np.zeros((len(features), len(word_dict.keys())))
+        for index, feature in enumerate(features):
+            vecs[index] = get_feature_by_words(feature, word_dict)[0]
+
+    else:
+        vecs = np.array(features)
+
+    km = KMeans(n_clusters=num_clusters).fit(vecs)
     paper_labels = km.labels_
 
     print(paper_labels)
 
-    return
-    for fn in os.listdir(rootdir):
-        fnpath = os.path.join(rootdir, fn)
+    #return
+    for fn in os.listdir(paperdir):
+        fnpath = os.path.join(paperdir, fn)
         if os.path.isdir(fnpath):
             continue
 
-        normal_name = get_normalize_name(fn)
+        txtfn = fn.replace(".pdf", ".txt")
 
-        if normal_name != None:
-            feature = get_feature_by_filename(normal_name, word_dict)
-            predictresult = km.predict(feature)
-            dstdir = os.path.join(rootdir, str(predictresult[0]))
+        txtpath = os.path.join(rootdir, txtfn)
+
+        if not os.path.exists(txtpath):
+            continue
+
+        if featuretype is "name":
+            feature = get_normalize_name(fn)
+        elif featuretype is "content":
+            feature = get_paper_content(txtpath)
+
+        if feature != None:
+            vector = get_feature_by_words(feature, word_dict)
+            predictresult = km.predict(vector)
+            dstdir = os.path.join(paperdir, str(predictresult[0]))
         else:
-            dstdir = os.path.join(rootdir, "notsure")
+            dstdir = os.path.join(paperdir, "notsure")
 
         if not os.path.exists(dstdir):
             os.makedirs(dstdir)
-        shutil.copy(os.path.join(rootdir, fn), os.path.join(dstdir, fn))
+        shutil.copy(os.path.join(paperdir, fn), os.path.join(dstdir, fn))
 
 def init_dict_vec(dictfile):
     global dict_vec
+    fkey = open("key.txt", "w")
     with open(dictfile, "r") as fdict:
-        lines = fdict.readlines()
+        word = "nothing"
+        while True:
 
-    for line in lines:
-        datas = line.split(" ")
-        word = datas[0]
-        vec = datas[1:]
-        vec = map(eval, vec)
+            line = fdict.readline()
+            if line is "":
+                print(word)
+                break
 
-        dict_vec[word] = np.array(vec)
+            datas = line.split(" ")
+            word = datas[0]
+
+            fkey.write(word + ", ")
+            vec = datas[1:]
+            vec = map(eval, vec)
+
+            dict_vec[word] = np.array(vec, dtype=np.float16)
 
     print(dict_vec["and"])
+    fkey.close()
+    #print(dict_vec.keys())
 
 
 if __name__=='__main__':
-    dictfile = r"resource/glove.6B.50d.txt"
-    init_dict_vec(dictfile)
+    featuretype = "content"
+    if featuretype is None:
+        dictfile = r"resource/glove.6B.50d.txt"
+        init_dict_vec(dictfile)
 
     filedir = r"content"
-    num_clusters = 10
-    classify_papers(filedir, num_clusters=num_clusters)
+    num_clusters = 20
+    paperdir = r"D:\paper"
+    classify_papers(filedir, paperdir, num_clusters=num_clusters, featuretype=featuretype)
