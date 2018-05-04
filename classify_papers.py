@@ -7,7 +7,7 @@ import numpy as np
 import fnmatch
 from textblob import TextBlob
 #from textblob import Word
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.cluster import KMeans
 from nltk.stem.wordnet import WordNetLemmatizer
 
@@ -111,8 +111,11 @@ def get_paper_feature(fnpath):
     return normfeature
 
 def classify_papers(rootdir, paperdir, num_clusters=5, featuretype="content"):
-    features = []
+    count_v1 = CountVectorizer(max_df=0.8, min_df=0.01)
+    tfidf = TfidfTransformer(norm="l2")
 
+    features = []
+    fn_index_dict = {}
     for fn in os.listdir(rootdir):
         fnpath = os.path.join(rootdir, fn)
         if os.path.isdir(fnpath):
@@ -123,29 +126,31 @@ def classify_papers(rootdir, paperdir, num_clusters=5, featuretype="content"):
             feature = get_normalize_name(fn)
             #if name != None:
             #    features.append(unicode(name))
-
         elif featuretype is "content":
             feature = get_paper_content(fnpath)
             #if content != None:
             #    features.append(unicode(content))
-
         else:
             feature = get_paper_feature(fnpath)
 
         if feature != None:
+            fn_index_dict[fn] = len(fn_index_dict)
             features.append(feature)
 
     if featuretype is "name" or featuretype is "content":
-        count_v1 = CountVectorizer(max_df=0.8, min_df=0.01)
-        counts_train = count_v1.fit_transform(features)
+        freq_term_matrix = count_v1.fit_transform(features)
 
-        word_dict = {}
-        for index, word in enumerate(count_v1.get_feature_names()):
-            word_dict[word] = index
+        #tfidf.fit(freq_term_matrix)
 
-        vecs = np.zeros((len(features), len(word_dict.keys())))
-        for index, feature in enumerate(features):
-            vecs[index] = get_feature_by_words(feature, word_dict)[0]
+        vecs = tfidf.fit_transform(freq_term_matrix)
+
+        # word_dict = {}
+        # for index, word in enumerate(count_v1.get_feature_names()):
+        #     word_dict[word] = index
+
+        # vecs = np.zeros((len(features), len(word_dict.keys())))
+        # for index, feature in enumerate(features):
+        #     vecs[index] = get_feature_by_words(feature, word_dict)[0]
 
     else:
         vecs = np.array(features)
@@ -168,17 +173,11 @@ def classify_papers(rootdir, paperdir, num_clusters=5, featuretype="content"):
         if not os.path.exists(txtpath):
             continue
 
-        if featuretype is "name":
-            feature = get_normalize_name(fn)
-        elif featuretype is "content":
-            feature = get_paper_content(txtpath)
-
-        if feature != None:
-            vector = get_feature_by_words(feature, word_dict)
-            predictresult = km.predict(vector)
-            dstdir = os.path.join(paperdir, str(predictresult[0]))
-        else:
+        if txtfn not in fn_index_dict.keys():
             dstdir = os.path.join(paperdir, "notsure")
+        else:
+            predictlabel = paper_labels[fn_index_dict[txtfn]]
+            dstdir = os.path.join(paperdir, str(predictlabel))
 
         if not os.path.exists(dstdir):
             os.makedirs(dstdir)
