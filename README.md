@@ -17,3 +17,5 @@ Unsupervised classification by the topics of papers
 20180508 算法改进：
     
     最初版本使用bag-of-words方法作为特征，又改为使用tf-idf特征，效果有提高，但是会出现很多文章聚集在其中一类的情况，需要再进一步细分。
+    
+    在得到tf-idf之后，再做SVD分解（Latent Semantic Indexing，LSI，参考论文《Latent Semantic Indexing: An overview》），效果又有提高。
