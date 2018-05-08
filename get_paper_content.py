@@ -12,7 +12,7 @@ from pdfminer.layout import LAParams
 from pdfminer.image import ImageWriter
 import os
 
-def get_paper_content(fname):
+def get_paper_content(fname, pages=2, outdir="data"):
     debug = 0
     # input option
     password = ''
@@ -21,7 +21,7 @@ def get_paper_content(fname):
     # output option
     basename = os.path.basename(fname)
     basename = basename.replace(".pdf", "")
-    outfile = os.path.join("data", basename + ".html")
+    outfile = os.path.join(outdir, basename + ".html")
     outtype = None
     imagewriter = None
     rotation = 0
@@ -76,7 +76,7 @@ def get_paper_content(fname):
         for index, page in enumerate(PDFPage.get_pages(fp, pagenos,
                                       maxpages=maxpages, password=password,
                                       caching=caching, check_extractable=True)):
-            if index > 2:
+            if index > pages:
                 break
             page.rotate = (page.rotate+rotation) % 360
             interpreter.process_page(page)
@@ -92,7 +92,12 @@ def get_paper_content(fname):
 if __name__ == '__main__':
     import fnmatch
     fdir = r"D:\paper"
+    pages = 5
+    outdir = "data_p" + str(pages)
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+
     for fname in os.listdir(fdir):
         if fnmatch.fnmatch(fname, "*.pdf"):
             #print(fname)
-            get_paper_content(os.path.join(fdir, fname))
+            get_paper_content(os.path.join(fdir, fname), pages=pages, outdir=outdir)

@@ -1,16 +1,18 @@
+import re
+
 def clean_string(srcdata):
-    data = srcdata.replace("\r\n", " ")
-    data = data.strip()
-    data = data.replace(",", "")
-    data = data.replace(".", "")
-    data = data.replace(":", "")
-    data = data.replace("(", "")
-    data = data.replace(")", "")
-    data = data.replace("[", "")
-    data = data.replace("]", "")
-    data = data.replace("+", "")
-    data = data.replace("-", " ")
-    data = data.replace("/", " ")
+    remove_chars = [",", ".", ":", "\"", "'", "(", ")", "[", "]", "+"]
+    replace_blank_chars = ["\r\n", "-", "/"]
+
+    data = srcdata.strip()
+
+    for char in remove_chars:
+        data = data.replace(char, "")
+    for char in replace_blank_chars:
+        data = data.replace(char, " ")
+
+    pattern = "\s(\d+)"
+    data = re.sub(pattern, " ", data)
 
     while True:
         dstdata = data.replace("  ", " ")

@@ -110,8 +110,19 @@ def get_paper_feature(fnpath):
     print(normfeature)
     return normfeature
 
+def getLSIrepresentation(original_matrix, dimension=100):
+    matrix_a = original_matrix.toarray()
+
+    u, s, vh = np.linalg.svd(matrix_a)
+    s_k = s[:dimension]
+    s_k = np.diag(s_k)
+    u_k = u[:, :dimension]
+    vh_k = vh[:dimension, :]
+
+    return np.matmul(np.matmul(u_k, s_k), vh_k)
+
 def classify_papers(rootdir, paperdir, num_clusters=5, featuretype="content"):
-    count_v1 = CountVectorizer(max_df=0.8, min_df=0.01)
+    count_v1 = CountVectorizer(max_df=0.9, min_df=0.02)
     tfidf = TfidfTransformer(norm="l2")
 
     features = []
@@ -143,7 +154,7 @@ def classify_papers(rootdir, paperdir, num_clusters=5, featuretype="content"):
         #tfidf.fit(freq_term_matrix)
 
         vecs = tfidf.fit_transform(freq_term_matrix)
-
+        vecs = getLSIrepresentation(vecs)
         # word_dict = {}
         # for index, word in enumerate(count_v1.get_feature_names()):
         #     word_dict[word] = index
@@ -155,12 +166,11 @@ def classify_papers(rootdir, paperdir, num_clusters=5, featuretype="content"):
     else:
         vecs = np.array(features)
 
-    km = KMeans(n_clusters=num_clusters).fit(vecs)
+    km = KMeans(n_clusters=num_clusters, n_init=100, max_iter=1000).fit(vecs)
     paper_labels = km.labels_
 
     print(paper_labels)
 
-    #return
     for fn in os.listdir(paperdir):
         fnpath = os.path.join(paperdir, fn)
         if os.path.isdir(fnpath):

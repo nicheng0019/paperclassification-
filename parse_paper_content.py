@@ -19,7 +19,7 @@ class MyHTMLParser(HTMLParser):
         #print "Encountered some data  :", data
         self.content = self.content + " " + data
 
-def parse_paper_content(fname):
+def parse_paper_content(fname, dstdir='content'):
     # instantiate the parser and fed it some HTML
     parser = MyHTMLParser()
 
@@ -32,12 +32,16 @@ def parse_paper_content(fname):
     data = clean_string(parser.content)
 
     txtname = os.path.basename(fname).replace(".html", ".txt")
-    with open(os.path.join("content", txtname), "a") as ftxt:
+    with open(os.path.join(dstdir, txtname), "w") as ftxt:
         ftxt.write(data)
 
 if __name__ == '__main__':
     import fnmatch
-    htmldir = r"data/"
+    htmldir = r"data_p5/"
+    dstdir = "content"
+    if not os.path.exists(dstdir):
+        os.makedirs(dstdir)
+
     for fname in os.listdir(htmldir):
         if fnmatch.fnmatch(fname, "*.html"):
-            parse_paper_content(os.path.join(htmldir, fname))
+            parse_paper_content(os.path.join(htmldir, fname), dstdir)
