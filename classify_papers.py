@@ -10,6 +10,8 @@ from textblob import TextBlob
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.cluster import KMeans
 from nltk.stem.wordnet import WordNetLemmatizer
+from nltk.corpus import stopwords
+from nltk.stem.porter import PorterStemmer
 
 from utils import *
 
@@ -63,11 +65,21 @@ def get_words_vector(words):
 
     return np.array(vecs)
 
+def get_string_stem(content):
+    porter = PorterStemmer()
+
+    new_content = ""
+    words = content.split(" ")
+    for word in words:
+        new_content = new_content + porter.stem(word) + " "
+
+    return new_content
+
 def get_paper_content(filename):
     with codecs.open(filename, mode="r", encoding="utf-8") as ftxt:
-        content = ftxt.readline()
+        content = ftxt.readline().strip()
 
-        return content
+        return get_string_stem(content)#[porter.stem(word) for word in content.split(" ")]
 
 def get_paper_words(filename):
     global dict_vec
@@ -121,7 +133,7 @@ def getLSIrepresentation(original_matrix, dimension=100):
     return np.matmul(np.matmul(u_k, s_k), vh_k)
 
 def classify_papers(rootdir, paperdir, num_clusters=5, featuretype="tfidf", featureattribute="content"):
-    count_v1 = CountVectorizer(max_df=0.9, min_df=0.02)
+    count_v1 = CountVectorizer(max_df=0.9, min_df=0.02, stop_words=stopwords.words('english'))
     tfidf = TfidfTransformer(norm="l2")
 
     if featuretype is "averagewordvector":
@@ -152,7 +164,6 @@ def classify_papers(rootdir, paperdir, num_clusters=5, featuretype="tfidf", feat
 
     if "tfidf" in featuretype:
         freq_term_matrix = count_v1.fit_transform(features)
-
         #tfidf.fit(freq_term_matrix)
 
         vecs = tfidf.fit_transform(freq_term_matrix)
@@ -215,7 +226,7 @@ def init_dict_vec(dictfile):
 
 
 if __name__=='__main__':
-    featuretype = "averagewordvector"
+    featuretype = "tfidf+LSI"
     featureattribute = "content"
     if featuretype is "averagewordvector":
         dictfile = r"resource/simple50d.txt"
