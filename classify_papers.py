@@ -51,10 +51,10 @@ def get_feature_by_words(filename, word_dict):
 
     return feature
 
-def get_words_feature(words):
+def get_words_vector(words):
     global dict_vec
+
     vecs = []
-    print(dict_vec.keys())
     for word in words:
         if word not in dict_vec:
             continue
@@ -70,27 +70,29 @@ def get_paper_content(filename):
         return content
 
 def get_paper_words(filename):
+    global dict_vec
+
     content = get_paper_content(filename)
     if len(content) == 0:
         return None
 
-    lem = WordNetLemmatizer()
+    #lem = WordNetLemmatizer()
 
-    content = content[0]
     words = content.split(" ")
     wordsnew = []
     for word in words:
         word = word.lower()
-        if check_invalid_word(word):
+        if word not in dict_vec.keys():
             continue
 
         lower_word = word.lower()
-        correct_word = TextBlob(lower_word).correct().words[0]
-        lemmatize_word = lem.lemmatize(correct_word, "n")
+        if check_invalid_word(lower_word):
+            continue
 
-        wordsnew.append(lemmatize_word)
+        # correct_word = TextBlob(lower_word).correct().words[0]
+        # lemmatize_word = lem.lemmatize(correct_word, "n")
 
-    #print("wordsnew", wordsnew)
+        wordsnew.append(lower_word)
 
     return wordsnew
 
@@ -99,16 +101,13 @@ def get_paper_feature(fnpath):
     if words is None:
         return None
 
-    feature = get_words_feature(words)
+    feature = get_words_vector(words)
     if len(feature) == 0:
         return None
 
-    normfeature = np.zeros([100, feature.shape[1]])
-    validnum = min(100, feature.shape[0])
-    normfeature[validnum, :] = feature[validnum, :]
+    feature = np.mean(feature, axis=0)
 
-    print(normfeature)
-    return normfeature
+    return feature
 
 def getLSIrepresentation(original_matrix, dimension=100):
     matrix_a = original_matrix.toarray()
@@ -121,9 +120,12 @@ def getLSIrepresentation(original_matrix, dimension=100):
 
     return np.matmul(np.matmul(u_k, s_k), vh_k)
 
-def classify_papers(rootdir, paperdir, num_clusters=5, featuretype="content"):
+def classify_papers(rootdir, paperdir, num_clusters=5, featuretype="tfidf", featureattribute="content"):
     count_v1 = CountVectorizer(max_df=0.9, min_df=0.02)
     tfidf = TfidfTransformer(norm="l2")
+
+    if featuretype is "averagewordvector":
+        featureattribute = "vector"
 
     features = []
     fn_index_dict = {}
@@ -133,43 +135,42 @@ def classify_papers(rootdir, paperdir, num_clusters=5, featuretype="content"):
             continue
 
         feature = None
-        if featuretype is "name":
+        if featureattribute is "name":
             feature = get_normalize_name(fn)
             #if name != None:
             #    features.append(unicode(name))
-        elif featuretype is "content":
+        elif featureattribute is "content":
             feature = get_paper_content(fnpath)
             #if content != None:
             #    features.append(unicode(content))
-        else:
+        elif featureattribute is "vector":
             feature = get_paper_feature(fnpath)
 
         if feature != None:
             fn_index_dict[fn] = len(fn_index_dict)
             features.append(feature)
 
-    if featuretype is "name" or featuretype is "content":
+    if "tfidf" in featuretype:
         freq_term_matrix = count_v1.fit_transform(features)
 
         #tfidf.fit(freq_term_matrix)
 
         vecs = tfidf.fit_transform(freq_term_matrix)
-        vecs = getLSIrepresentation(vecs)
-        # word_dict = {}
-        # for index, word in enumerate(count_v1.get_feature_names()):
-        #     word_dict[word] = index
 
-        # vecs = np.zeros((len(features), len(word_dict.keys())))
-        # for index, feature in enumerate(features):
-        #     vecs[index] = get_feature_by_words(feature, word_dict)[0]
+        if featuretype is "tfidf+LSI":
+            vecs = getLSIrepresentation(vecs)
+
+    elif featuretype is "averagewordvector":
+        vecs = np.array(features)
 
     else:
-        vecs = np.array(features)
+        print("Value of para featuretype is wrong!", featuretype)
+        quit()
 
     km = KMeans(n_clusters=num_clusters, n_init=100, max_iter=1000).fit(vecs)
     paper_labels = km.labels_
 
-    print(paper_labels)
+    #print(paper_labels)
 
     for fn in os.listdir(paperdir):
         fnpath = os.path.join(paperdir, fn)
@@ -195,11 +196,10 @@ def classify_papers(rootdir, paperdir, num_clusters=5, featuretype="content"):
 
 def init_dict_vec(dictfile):
     global dict_vec
-    fkey = open("key.txt", "w")
-    with open(dictfile, "r") as fdict:
-        word = "nothing"
-        while True:
 
+    with open(dictfile, "r") as fdict:
+        word = None
+        while True:
             line = fdict.readline()
             if line is "":
                 print(word)
@@ -208,24 +208,20 @@ def init_dict_vec(dictfile):
             datas = line.split(" ")
             word = datas[0]
 
-            fkey.write(word + ", ")
             vec = datas[1:]
             vec = map(eval, vec)
 
             dict_vec[word] = np.array(vec, dtype=np.float16)
 
-    print(dict_vec["and"])
-    fkey.close()
-    #print(dict_vec.keys())
-
 
 if __name__=='__main__':
-    featuretype = "content"
-    if featuretype is None:
-        dictfile = r"resource/glove.6B.50d.txt"
+    featuretype = "averagewordvector"
+    featureattribute = "content"
+    if featuretype is "averagewordvector":
+        dictfile = r"resource/simple50d.txt"
         init_dict_vec(dictfile)
 
     filedir = r"content"
     num_clusters = 20
     paperdir = r"D:\paper"
-    classify_papers(filedir, paperdir, num_clusters=num_clusters, featuretype=featuretype)
+    classify_papers(filedir, paperdir, num_clusters=num_clusters, featuretype=featuretype, featureattribute=featureattribute)
