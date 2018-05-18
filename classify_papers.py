@@ -53,7 +53,7 @@ def get_feature_by_words(filename, word_dict):
 
     return feature
 
-def get_words_vector(words):
+def get_words_vector(words, weights=None):
     global dict_vec
 
     vecs = []
@@ -61,7 +61,11 @@ def get_words_vector(words):
         if word not in dict_vec:
             continue
 
-        vecs.append(dict_vec[word])
+        weight = 1.0
+        if weights != None:
+            weight = weights[word]
+
+        vecs.append(dict_vec[word] * weight)
 
     return np.array(vecs)
 
@@ -108,12 +112,12 @@ def get_paper_words(filename):
 
     return wordsnew
 
-def get_paper_feature(fnpath):
+def get_paper_vector(fnpath, weights=None):
     words = get_paper_words(fnpath)
     if words is None:
         return None
 
-    feature = get_words_vector(words)
+    feature = get_words_vector(words, weights=weights)
     if len(feature) == 0:
         return None
 
@@ -133,7 +137,6 @@ def getLSIrepresentation(original_matrix, dimension=100):
     return np.matmul(np.matmul(u_k, s_k), vh_k)
 
 def classify_papers(rootdir, paperdir, num_clusters=5, featuretype="tfidf", featureattribute="content"):
-    count_v1 = CountVectorizer(max_df=0.9, min_df=0.02, stop_words=stopwords.words('english'))
     tfidf = TfidfTransformer(norm="l2")
 
     if featuretype is "averagewordvector":
@@ -149,27 +152,55 @@ def classify_papers(rootdir, paperdir, num_clusters=5, featuretype="tfidf", feat
         feature = None
         if featureattribute is "name":
             feature = get_normalize_name(fn)
-            #if name != None:
-            #    features.append(unicode(name))
-        elif featureattribute is "content":
+        elif "content" in featureattribute:
             feature = get_paper_content(fnpath)
-            #if content != None:
-            #    features.append(unicode(content))
         elif featureattribute is "vector":
-            feature = get_paper_feature(fnpath)
+            feature = get_paper_vector(fnpath)
 
         if feature != None:
             fn_index_dict[fn] = len(fn_index_dict)
             features.append(feature)
 
     if "tfidf" in featuretype:
+        count_v1 = CountVectorizer(max_df=0.9, min_df=0.02, stop_words=stopwords.words('english'))
         freq_term_matrix = count_v1.fit_transform(features)
-        #tfidf.fit(freq_term_matrix)
 
         vecs = tfidf.fit_transform(freq_term_matrix)
-
         if featuretype is "tfidf+LSI":
             vecs = getLSIrepresentation(vecs)
+
+    elif featuretype is "sif":
+        count_v1 = CountVectorizer()
+        freq_term_matrix = count_v1.fit_transform(features)
+        freq_word_array = np.sum(freq_term_matrix, axis=0, dtype=np.float32)
+        freq_word_array = freq_word_array / np.sum(freq_word_array, dtype=np.float32)
+
+        weight_dict = {}
+        a = 0.0001
+        for word in count_v1.vocabulary_.keys():
+            weight_dict[word] = a / (a + freq_word_array[0, count_v1.vocabulary_[word]])
+
+        vecs = []
+        fn_index_dict = {}
+        for fn in os.listdir(rootdir):
+            if os.path.isdir(fnpath):
+                continue
+
+            vec = get_paper_vector(fnpath, weights=weight_dict)
+            if vec != None:
+                fn_index_dict[fn] = len(fn_index_dict)
+                vecs.append(vec)
+        vecs = np.array(vecs, dtype=np.float32)
+
+        u, s, vh = np.linalg.svd(vecs)
+        s[0] = 0
+        s = np.diag(s)
+        n1 = u.shape[0]
+        n2 = vh.shape[0]
+        n3 = s.shape[0]
+        news = np.zeros((n1, n2))
+        news[:n3, :n3] = s
+        vecs = np.matmul(np.matmul(u, news), vh)
 
     elif featuretype is "averagewordvector":
         vecs = np.array(features)
@@ -209,11 +240,9 @@ def init_dict_vec(dictfile):
     global dict_vec
 
     with open(dictfile, "r") as fdict:
-        word = None
         while True:
             line = fdict.readline()
             if line is "":
-                print(word)
                 break
 
             datas = line.split(" ")
@@ -226,9 +255,9 @@ def init_dict_vec(dictfile):
 
 
 if __name__=='__main__':
-    featuretype = "tfidf+LSI"
-    featureattribute = "content"
-    if featuretype is "averagewordvector":
+    featuretype = "sif"
+    featureattribute = "vector+content"
+    if "vector" in featureattribute:
         dictfile = r"resource/simple50d.txt"
         init_dict_vec(dictfile)
 
